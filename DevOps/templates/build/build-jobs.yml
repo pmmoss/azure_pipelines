@@ -1,0 +1,127 @@
+
+# Build Known Smarthub services
+jobs:
+########################################################################################
+## SQL Builds      
+########################################################################################
+#### GaugeProd Database
+- job: build_gaugeprodDB
+  pool:
+    name: 'default'
+    demands: 'AZ'
+  steps:
+  - template: '/DevOps/templates/build/build-gaugeprod-db.yml' 
+    parameters: 
+      GT_ServiceName: 'GT-DB-GaugeProd-CICD'
+      GT_WorkingFolder: 'GT-DB-GaugeProd-CICD'
+####    SQL Reports
+- job: build_gaugeDBReports
+  pool: 
+    vmImage: 'windows-latest'
+    #name: 'default'
+    #demands: 'SQL'
+  steps:
+  - template: '/DevOps/templates/build/build-reports.yml' 
+    parameters: 
+      GT_ServiceName: 'GTReports'
+      GT_WorkingFolder: 'GTReports'
+########################################################################################
+## Windows Services      
+########################################################################################
+#############################                           NetCore Build AssetEventEngine   
+- job: build_AssetEventEngine
+  steps:
+  - template: '/DevOps/templates/build/build-netcore-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'AssetEventEngine'
+      GT_WorkingFolder: 'AssetEventEngine'   
+
+#### Harvester
+- job: build_harvester
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'Harvester'
+      GT_WorkingFolder: 'Harvester\HarvesterService'
+### Notification
+- job: build_notification
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'Notification'
+      GT_WorkingFolder: 'Notification\NotificationService'
+# ### Decoder
+- job: build_decoder
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml' 
+    parameters: 
+      GT_ServiceName: 'DecoderService'
+      GT_WorkingFolder: 'DecoderService\DecoderService'
+# #### Listener
+- job: build_listener
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'ListenerService'
+      GT_WorkingFolder: 'ListenerService\ListenerService'
+############################## GTBatch Build
+- job: build_gtbatch
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'GTBatchService'      
+      GT_WorkingFolder: 'GTBatchService\GTBatchService'
+########################################################################################
+## Windows Scheduled Tasks      
+########################################################################################      
+####  GTMaintenanceNotification Build
+- job: build_GTMaintenanceNotification
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'GTMaintenanceNotification'      
+      GT_WorkingFolder: 'GTMaintenanceNotification\GTMaintenanceNotification'
+# ############################## 
+- job: build_AEMPImport
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml' 
+    parameters: 
+      GT_ServiceName: 'AEMPImport' 
+      GT_WorkingFolder: 'AEMPImport'  
+###############################
+- job: build_GTNHTSAUpdate
+  steps:
+  - template: '/DevOps/templates/build/build-ms-service.yml'  
+    parameters: 
+      GT_ServiceName: 'GTNHTSAUpdateService'
+      GT_WorkingFolder: 'GTNHTSAUpdateService\GTNHTSAUpdateService'
+####
+- job: build_HubSpotUserExport
+  steps:
+  - template: '/DevOps/templates/build/build-netcore-ms-service.yml@DevOps'  
+    parameters: 
+      GT_ServiceName: 'HubSpotUserExport'
+      GT_WorkingFolder: 'HubSpotUserExport'
+
+########################################################################################
+## Windows WEb Applications ASP.NET      
+########################################################################################   
+# #############################
+- job: build_smarthub
+  pool: 
+    vmImage: 'windows-latest'
+  steps:
+  - template: '/DevOps/templates/build/build-ms-iis.yml' 
+    parameters: 
+      GT_ServiceName: 'smarthub'
+      GT_WorkingFolder: 'GTWeb'    
+#############################                           IIS GTAPI Build        
+- job: build_GTAPI
+  pool: 
+    vmImage: 'windows-latest'
+  steps:
+  - template: '/DevOps/templates/build/build-ms-iis.yml'  
+    parameters: 
+      GT_ServiceName: 'GTAPI'
+      solution:   'GTAPI\API.sln'  
+      GT_WorkingFolder: 'GTAPI\API'   

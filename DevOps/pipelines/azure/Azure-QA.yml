@@ -1,0 +1,164 @@
+schedules:
+- cron: "15 10,16,22 * * *"
+  displayName: 'Daily 6:15am, 12:15, 6:15pm release- times in EST'
+  always: true
+  branches:
+    include:
+    - master
+trigger: none
+pr: none  
+resources:
+  pipelines: 
+  - pipeline: 'Deploy'
+    project: Gauge
+    source: 'QA-Monolith-Build'
+  repositories:
+  - repository: Smarthub
+    type: git
+    name: Gauge/Smarthub   
+
+pool: 'default'
+
+###################################################################################################
+stages:
+- stage: 'Stop_Services'
+  displayName: 'Stop Services'
+  jobs:
+  - deployment: 'Stop_APP'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Stop APP'  # friendly name to display in the UI
+    environment: 
+      name: GT-AZ-QA
+      resourceType: VirtualMachine
+      tags: APP
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: none
+          - task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+            displayName: 'Inline Powershell'
+            inputs:
+              ScriptArguments: '-serviceName GT_*'
+              Script: |
+                Param(
+                  [string]$ServiceName
+                )
+                # Variables
+                #$evnt                          = right($ServiceName,7)
+                $process                       = $ServiceName + "Service"
+              
+                Write-Output "Settings"
+                Write-Output "    Service Name:                         $ServiceName"
+                Write-Output "    Process Name:                         $process"  
+                
+                Write-Output "    Stopping service $ServiceName..."
+                Get-Service -name $ServiceName | Stop-Service 
+                (Get-Service -name $ServiceName ).WaitForStatus('Stopped')
+                Write-Output (Get-Service -Name $ServiceName).status
+                # Validate Process Handles 
+                Write-Output $process "Handlecount: " -ErrorAction SilentlyContinue
+                (Get-Process -Name $Process -ErrorAction SilentlyContinue).HandleCount 
+                Wait-Process -Name $Process -Timeout 120 -ErrorAction SilentlyContinue
+                Write-Output (Get-Service -Name $ServiceName ).status
+
+#######################################################################################################
+- stage: 'Deploy_DB'
+  displayName: 'Deploy_DataBase'
+  jobs:
+  - job: Deploy_DB
+    workspace:
+      clean: all 
+    pool: 
+      name: 'default'
+      demands: 'AZ'     
+    variables:
+    - group: Azure-QA
+    - template: /Yml-pipelines/vars-qa.yml@Smarthub
+    steps:
+     - checkout: none 
+     - download: Deploy
+       displayName: 'Download GaugeProd Build'
+       artifact: 'Database Build Artifact'
+
+     - task: RedgateSqlChangeAutomationRelease@4
+       displayName: 'Deploy_GaugeProd'
+       inputs:
+         Operation: 'DeployFromPackage'
+         PackagePath: '$(Pipeline.Workspace)/Deploy/Database Build Artifact'
+         SourceTrustServerCertificate: true
+         TargetDatabaseConnectionType: 'explicit'
+         TargetDatabaseServer: '$(TargetDatabaseServer)'
+         TargetTrustServerCertificate: true
+         TargetDatabaseName: '$(TargetDatabaseName)'
+         TargetAuthMethod: 'windowsAuthCredentials'
+         TargetDatabaseUsername: '$(TargetDatabaseUsername)'
+         TargetDatabasePassword: '$(TargetDatabasePassword)'
+         TransactionIsolationLevel: 'serializable'
+         AbortOnWarning: 'high'
+         requiredVersionOfDlma: latest
+
+     - download: Deploy
+       displayName: 'Download GTReports Build'
+       artifact: 'GTReports'
+     - task: SqlReportingServicesDeployment@1
+       displayName: 'Deploy_Reports'
+       inputs:
+         ReportFiles: '$(Pipeline.Workspace)/Deploy/GTReports/*.rdl'
+         ReportUploadRootPath: '/Gauge'
+         WebserviceUrl: '$(ReportingService2010WebServiceURL)'
+         WsUsername: '$(TargetDatabaseUsername)'
+         WsPassword: '$(TargetDatabasePassword)'
+###################################################################################################  
+  - deployment: 'Deploy_to_WEB_Server'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_to_WEB_Server'  # friendly name to display in the UI
+    variables:
+    - group: Azure-QA
+    - template: /Yml-pipelines/vars-qa.yml@Smarthub
+    environment: 
+      name: GT-AZ-QA
+      resourceType: VirtualMachine
+      tags: WEB
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+            displayName: 'Download SmartHub'
+            artifact: smarthub
+
+          - download: Deploy
+            displayName: 'Download GTAPI'
+            artifact: GTAPI
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub'
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub_API'
+              WebsiteSource: 'GTAPI'
+################################################################################################
+- stage: 'Deploy_to_AZURE_APP_Server'
+  displayName: 'Deploy_to_AZURE_APP_Server'
+  jobs:
+  - deployment: 'Deploy_to_AZURE_APP_Server'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_to_AZURE_APP_Server'  # friendly name to display in the UI
+    variables:
+    - group: Azure-QA
+    - template: /Yml-pipelines/vars-qa.yml@Smarthub
+    environment: 
+      name: GT-AZ-QA
+      resourceType: VirtualMachine
+      tags: MONO
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+          - template: '/DevOps/pipelines/azure/APP-jobs.yml'
+          - template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml'
+            parameters: 
+              GT_ServiceName: 'GT_Listener'
+              GT_WorkingFolder: 'ListenerService'
+              GT_APP_NAME: 'Listener'

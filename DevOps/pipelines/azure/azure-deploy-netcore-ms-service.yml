@@ -1,0 +1,137 @@
+# Deploy Microsoft Services to APPservers servers
+# Sets Variables for BuildReleaseVersion, ApplicationName, LaunchDarklyApplicationName
+# Parameterized for ENV (PROD,QA,DEV)
+parameters:
+  GT_ServiceName: ''
+  GT_workingFolder: ''
+  GT_APP_NAME: ''
+steps:
+# Set Variables
+- task: jessehouwing.jessehouwing-vsts-variable-tasks.vsts-variable-set.VariableSetTask@1
+  displayName: 'Set variable:BuildReleaseVersion to: $(Build.BuildNumber)'
+  inputs:
+    VariableName: BuildReleaseVersion
+    Value: '$(Build.BuildNumber)'
+
+- task: jessehouwing.jessehouwing-vsts-variable-tasks.vsts-variable-set.VariableSetTask@1
+  displayName: 'Set variable:  to: Set variable:ApplicationName'
+  inputs:
+    VariableName: ApplicationName
+    Value: '${{ parameters.GT_APP_NAME }} $(ENV)'
+
+- task: jessehouwing.jessehouwing-vsts-variable-tasks.vsts-variable-set.VariableSetTask@1
+  displayName: 'Set variable:  LaunchDarklyApplicationName'
+  inputs:
+    VariableName: LaunchDarklyApplicationName
+    Value: '${{ parameters.GT_APP_NAME }}'
+
+# Change Tokens for app.config
+- task: qetza.replacetokens.replacetokens-task.replacetokens@3
+  displayName: 'Replace Tokens: $(Pipeline.Workspace)/Deploy/${{ parameters.GT_workingFolder }}'
+  inputs:
+    rootDirectory: '$(Pipeline.Workspace)/Deploy/${{ parameters.GT_workingFolder }}'
+    targetFiles: '**/appsettings.json'
+    encoding: 'auto'
+    writeBOM: true
+    actionOnMissing: 'warn'
+    keepToken: true
+    tokenPrefix: '#{'
+    tokenSuffix: '}'
+
+# Powershell on machine action
+- task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+  displayName: 'Inline Powershell'
+  inputs:
+    ScriptArguments: '-serviceName ${{ parameters.GT_ServiceName }} -workingfolder ${{ parameters.GT_workingFolder }} '
+    Script: |
+      Param(
+      [string]$ServiceName,
+      [string]$workingFolder
+      )
+      # Variables
+      $ServiceName = "GT_" + $ServiceName
+      $process                       = ($ServiceName -replace "GT_", "") + "Service"
+      $rootDir                       = "c:\Gauge\GTApplications"
+      $ServiceDirectory              = "$rootDir\$workingFolder"
+      $InstallSourceDirectory        = "$(Pipeline.Workspace)/Deploy/$workingFolder"
+      $InstallDestinationDirectory   =  $rootDir
+      $SQLServerTypesFiles           = "$ServiceDirectory\SqlServerTypes\x86\*"
+      
+  
+      Write-Output "    Service Name:                         $ServiceName"
+      Write-Output "    Process Name:                         $process"  
+      Write-Output "    Service Directory:                    $ServiceDirectory"
+      Write-Output "    Install Source Directory:             $InstallSourceDirectory"
+      Write-Output "    Install Destination Directory:        $InstallDestinationDirectory"
+      Write-Output "    SQLServerTypes Files :                $SQLServerTypesFiles"
+      Write-Output ""
+
+      #######################################################################################################
+            ## Logoff users SMB Sessions 
+      $sessions = Get-SmbSession  
+      ForEach($session in $sessions){
+        write-host "Closing open session: " ($session | Select-object ClientUserName )
+      }
+      $sessions | Close-SmbSession -Force
+      ## log off user
+      try {
+        query user /server:localhost 2>&1 | select -skip 1 | foreach {
+        logoff ($_ -split "\s+")[-6] /server:localhost
+        }
+      }
+      catch {&_}
+      
+      #  logic to see state of the service
+      Write-Output "Processing $ServiceName update..."
+      $originalstatus = (Get-Service -Name $ServiceName).status 
+      Write-Output $originalstatus
+
+      # Stop Service if it is running
+      if($originalstatus -eq "Running"){
+          Write-Output "    Stopping service $ServiceName..."
+          Get-Service -name $ServiceName | Stop-Service 
+          (Get-Service -name $ServiceName ).WaitForStatus('Stopped')
+          Write-Output (Get-Service -Name $ServiceName).status
+        # Validate Process Handles 
+          Write-Output $process "Handlecount: " -ErrorAction SilentlyContinue
+          (Get-Process -Name $Process -ErrorAction SilentlyContinue).HandleCount 
+          Wait-Process -Name $Process -Timeout 120 -ErrorAction SilentlyContinue
+          Start-Sleep -s 15
+      }
+      # Test That directory Exists
+      Write-Output " Testing source for files:  "
+      try {Test-Path $InstallSourceDirectory}
+      catch{
+        Write-Output "   ERROR:  $InstallSourceDirectory Source not found  "
+      }
+      
+ 
+
+      Write-Output "    Copy Files $InstallSourceDirectory  to $InstallDestinationDirectory"
+      Copy-Item $InstallSourceDirectory -Destination $InstallDestinationDirectory -Recurse -Force
+
+      #####  Restore Original State of the Service
+      Write-Output "    Entering running State from ($originalstatus) of service $ServiceName..."
+      # Start Service
+      Start-Service -name $ServiceName 
+      Write-Output (Get-Service -Name $ServiceName ).status
+      Write-Output "    $ServiceName update complete!"
+      Write-Output (Get-Service -Name $ServiceName ).status
+      write-output "Sleep 11 seconds for events"
+      Start-Sleep -s 11
+      ###################
+      # Check Eventlog for errors
+      
+      $eventerrors = $false
+      write-output "Checking Error Log for errors: -LogName $eventlogname"
+      $events = Get-EventLog -LogName "GT_EVTP" -Newest 3
+      foreach($event in $events){
+        if($event.EntryType -eq "error"){
+            Write-Error $event.EntryType.tostring()
+            Write-Error $event.message.tostring()
+            $eventerrors = $true
+        }
+        else {     
+        }
+      }
+      write-output $eventerrors.toString()

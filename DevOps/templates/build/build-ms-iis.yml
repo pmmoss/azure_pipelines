@@ -1,0 +1,56 @@
+# build-ms-iis.yml
+# UnTESTED _______      
+#Building .NET service application common steps
+# Pass Parameters
+
+parameters:
+  GT_ServiceName: ''
+  solution: 'Gauge.sln'
+  GT_WorkingFolder: ''
+steps:
+######################################################
+- task: PowerShell@2
+  displayName: 'PowerShell ${{ parameters.GT_ServiceName }} Param Check'
+  inputs:
+    targetType: Inline
+    script: |
+      Write-Host "Greetings from build-ms-iis.yml"
+      Write-Output "   platform      = $(BuildPlatform)"
+      Write-Output "   configuration = $(BuildConfiguration)"
+      Write-Output "   ServiceName as passed = ${{ parameters.GT_ServiceName }}"
+      Write-Output "   solution      =  ${{ parameters.solution}}"
+      Write-Output "   GT_working_folder  =  ${{ parameters.GT_WorkingFolder }}"
+      Write-Output "   ArtifactFolder = $(build.artifactstagingdirectory)"
+
+
+- task: NuGetToolInstaller@0
+  displayName: 'Use NuGet 5.8.0'
+  inputs: 
+    versionSpec: '5.8.0'
+
+- task: NuGetCommand@2
+  displayName: 'NuGet restore'
+  inputs:
+    command: 'restore'
+    restoreSolution: '${{ parameters.solution }}'
+    packagesdirectory: '.\packages'
+
+- task: VSBuild@1
+  displayName: 'Build solution'
+  inputs:
+    solution: '${{ parameters.solution }}'
+    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactstagingdirectory)\\"'
+    configuration: '$(BuildConfiguration)'
+
+- task: PublishSymbols@2
+  displayName: 'Publish symbols path'
+  inputs:
+    SearchPattern: '**\bin\**\*.pdb'
+    PublishSymbols: false
+  continueOnError: true
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact'
+  inputs:
+    PathtoPublish: '$(build.artifactstagingdirectory)'
+    artifactName: '${{ parameters.GT_ServiceName }}'

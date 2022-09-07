@@ -1,0 +1,303 @@
+schedules:
+- cron: "58 0 * * Tuesday,Friday"
+  displayName: 'Mon and Thurs 8:58pm EDT (12:58 UTC)' 
+  always: true
+  branches:
+    include:
+    - master
+resources:
+  pipelines: 
+  - pipeline: 'Deploy'
+    project: Gauge
+    source: 'PRODUCTION-Monolith-Build'
+  repositories:
+  - repository: Smarthub
+    type: git
+    name: Gauge/Smarthub   
+    
+trigger: none
+pr: none    
+
+pool: 'default'
+
+###################################################################################################
+stages:
+- stage: 'Stop_Listener'
+  displayName: 'Stop Listener'
+  jobs:
+  - deployment: 'Stop_Listener_VMAPPPRROD<N>'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Stop Listener'  # friendly name to display in the UI
+    environment: 
+      name: GT-AZ-PRD
+      resourceType: VirtualMachine
+      tags: MONO
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: none
+          - task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+            displayName: 'Inline Powershell'
+            inputs:
+              ScriptArguments: '-serviceName GT_Listener'
+              Script: |
+                Param(
+                  [string]$ServiceName
+                )
+                # Variables
+                #$evnt                          = right($ServiceName,7)
+                $process                       = $ServiceName + "Service"
+              
+                Write-Output "Settings"
+                Write-Output "    Service Name:                         $ServiceName"
+                Write-Output "    Process Name:                         $process"  
+                
+                Write-Output "    Stopping service $ServiceName..."
+                Get-Service -name $ServiceName | Stop-Service 
+                (Get-Service -name $ServiceName ).WaitForStatus('Stopped')
+                Write-Output (Get-Service -Name $ServiceName).status
+                # Validate Process Handles 
+                Write-Output $process "Handlecount: " -ErrorAction SilentlyContinue
+                (Get-Process -Name $Process -ErrorAction SilentlyContinue).HandleCount 
+                Wait-Process -Name $Process -Timeout 120 -ErrorAction SilentlyContinue
+                Write-Output (Get-Service -Name $ServiceName ).status
+  ################################################################################################
+  # Deploy Lightbound Listener Temporary till migration completed
+  # hardcode override Variables
+  # Remove Me !!!!!!!!!
+  ###############################################################################################
+  - deployment: 'Stop_Listener_Lightbound'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Stop Listener Lightbound'  # friendly name to display in the UI
+    environment: 
+      name: GT-LB-PRD
+      resourceType: VirtualMachine
+      tags: DMZ
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: none
+          - task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+            displayName: 'Inline Powershell'
+            inputs:
+              ScriptArguments: '-serviceName GT_Listener'
+              Script: |
+                Param(
+                  [string]$ServiceName
+                )
+                # Variables
+                #$evnt                          = right($ServiceName,7)
+                $process                       = $ServiceName + "Service"
+              
+                Write-Output "Settings"
+                Write-Output "    Service Name:                         $ServiceName"
+                Write-Output "    Process Name:                         $process"  
+                
+                Write-Output "    Stopping service $ServiceName..."
+                Get-Service -name $ServiceName | Stop-Service 
+                (Get-Service -name $ServiceName ).WaitForStatus('Stopped')
+                Write-Output (Get-Service -Name $ServiceName).status
+                # Validate Process Handles 
+                Write-Output $process "Handlecount: " -ErrorAction SilentlyContinue
+                (Get-Process -Name $Process -ErrorAction SilentlyContinue).HandleCount 
+                Wait-Process -Name $Process -Timeout 120 -ErrorAction SilentlyContinue
+                Write-Output (Get-Service -Name $ServiceName ).status
+#######################################################################################################
+
+#######################################################################################################
+- stage: 'Deploy_DB'
+  displayName: 'Deploy_DataBase'
+  jobs:
+  - job: Deploy_DB
+    workspace:
+      clean: all 
+    pool: 
+      name: 'default'
+      demands: 'AZ'     
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub
+    - group: Azure-PRD
+    steps:
+     - checkout: none 
+     - download: Deploy
+       displayName: 'Download GaugeProd Build'
+       artifact: 'Database Build Artifact'
+
+     - task: RedgateSqlChangeAutomationRelease@4
+       displayName: 'Deploy_GaugeProd'
+       inputs:
+         Operation: 'DeployFromPackage'
+         PackagePath: '$(Pipeline.Workspace)/Deploy/Database Build Artifact'
+         SourceTrustServerCertificate: true
+         TargetDatabaseConnectionType: 'explicit'
+         TargetDatabaseServer: '$(TargetDatabaseServer)'
+         TargetTrustServerCertificate: true
+         TargetDatabaseName: '$(TargetDatabaseName)'
+         TargetAuthMethod: 'windowsAuthCredentials'
+         TargetDatabaseUsername: '$(TargetDatabaseUsername)'
+         TargetDatabasePassword: '$(TargetDatabasePassword)'
+         TransactionIsolationLevel: 'serializable'
+         AbortOnWarning: 'high'
+         requiredVersionOfDlma: latest
+
+     - download: Deploy
+       displayName: 'Download GTReports Build'
+       artifact: 'GTReports'
+     - task: SqlReportingServicesDeployment@1
+       displayName: 'Deploy_Reports'
+       inputs:
+         ReportFiles: '$(Pipeline.Workspace)/Deploy/GTReports/*.rdl'
+         ReportUploadRootPath: '/Gauge'
+         WebserviceUrl: '$(ReportingService2010WebServiceURL)'
+         WsUsername: '$(TargetDatabaseUsername)'
+         WsPassword: '$(TargetDatabasePassword)'
+
+  - deployment: 'Deploy_SmartHub_Test_toServer'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_SmartHub_Test_toServer'  # friendly name to display in the UI
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub
+    - group: Azure-PRD
+    environment: 
+      name: GT-AZ-PRD
+      resourceType: VirtualMachine
+      tags: MONO
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+            artifact: smarthub
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub_Test'
+              WebsiteSource: 'SmartHub'
+              GT_APP_NAME: 'SmartHub'
+################################################################################################
+#  Add a test Stage here for test site if wanted
+################################################################################################
+- stage: 'Deploy_to_AZURE_APP_Server'
+  displayName: 'Deploy_to_AZURE_APP_Server'
+  jobs:
+  - deployment: 'Deploy_to_AZURE_APP_Server'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_to_AZURE_APP_Server'  # friendly name to display in the UI
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub   
+    - group: Azure-PRD
+    environment: 
+      name: GT-AZ-PRD
+      resourceType: VirtualMachine
+      tags: MONO
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+
+          - template: '/DevOps/pipelines/azure/APP-jobs.yml'
+
+          - template: '/DevOps/pipelines/azure/Azure-smarhubtest-to-smarthub.yml'
+            parameters: 
+              WebsiteName: 'SmartHub'
+              GT_APP_NAME: 'SmartHub'
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub_API'
+              WebsiteSource: 'GTAPI'
+
+################################################################################################
+- stage: 'Deploy_Listener'
+  displayName: 'Deploy_Listener'
+  jobs:
+  - deployment: 'Deploy_to_Azure_Server'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_to_Azure_Server'  # friendly name to display in the UI
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub
+    - group: Azure-PRD
+    environment: 
+      name: GT-AZ-PRD
+      resourceType: VirtualMachine
+      tags: MONO
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+            displayName: 'Download ListenerService'
+            artifact: ListenerService
+          - task: CopyFiles@2
+            displayName: 'Copy to Staging'
+            inputs:
+              SourceFolder: '$(Pipeline.Workspace)/Deploy/'
+              Contents: |
+                ListenerService/**
+              TargetFolder: 'c:\Gauge\GTDeploy'
+              CleanTargetFolder: true
+              OverWrite: true
+          - template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml'
+            parameters: 
+              GT_ServiceName: 'GT_Listener'
+              GT_WorkingFolder: 'ListenerService'
+              GT_APP_NAME: 'Listener'
+  ################################################################################################
+  # Deploy Lightbound Listener Temporary till migration completed
+  # hardcode override Variables
+  # Remove Me !!!!!!!!!
+  ###############################################################################################
+  - deployment: 'Deploy_Listener_To_Lightbound'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_Listener_To_Lightbound'  # friendly name to display in the UI
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub
+    - name: ReplicationEnabled
+      value: False
+    - name: 'ApplicationServices'
+      value: '"server=10.150.11.4;Database=SmartHub_Prod;User ID=GT-LB-PRD-DMZ-1;Password=My!!gauge;" providerName="System.Data.SqlClient"'
+    
+    environment: 
+      name: GT-LB-PRD
+      resourceType: VirtualMachine
+      tags: DMZ
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+            displayName: 'Download ListenerService'
+            artifact: ListenerService
+          - task: CopyFiles@2
+            displayName: 'Copy to Staging'
+            inputs:
+              SourceFolder: '$(Pipeline.Workspace)/Deploy/'
+              Contents: |
+                ListenerService/**
+              TargetFolder: 'G:\Gauge\GTDeploy'
+              CleanTargetFolder: true
+              OverWrite: true
+          - template: '/DevOps/pipelines/deploy-ms-service.yml'
+            parameters: 
+              GT_ServiceName: 'GT_Listener'
+              GT_WorkingFolder: 'ListenerService'
+              GT_APP_NAME: 'Listener'
+
+#####################################################################################################
+##   This is Scheduled Task from Old Server - can remove in azure
+# - stage: 'Start_Listener_Alerts'
+#   displayName: 'Start Listener Service Notifications'
+#   jobs:
+#   - deployment: 'Start_Listener'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+#     displayName: 'Start_Listener'  # friendly name to display in the UI
+#     environment: 
+#       name: GT-LB-PRD
+#       resourceType: VirtualMachine
+#       tags: MONO
+#     strategy:
+#       runOnce:
+#         deploy:
+#           steps:
+#           - download: none
+#           - task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+#             displayName: 'Inline Powershell'
+#             inputs:
+#               ScriptArguments: '-serviceName GT_Listener'
+#               Script: |
+#                 Enable-ScheduledTask -TaskName GTServicesMonitor

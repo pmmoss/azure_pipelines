@@ -1,0 +1,111 @@
+schedules:
+- cron: "58 0 * * Wednesday,Thursday,Saturday"
+  displayName: 'Tues, Wed, Fri 8:58pm EDT (12:58 UTC)' 
+  always: true
+  branches:
+    include:
+    - master
+resources:
+  pipelines:
+  - pipeline: 'Deploy'
+    project: Gauge
+    source: 'PRODUCTION-Monolith-Build'
+    trigger: true
+  repositories:
+  - repository: Smarthub
+    type: git
+    name: Gauge/Smarthub   
+    
+trigger: none
+pr: none    
+
+stages:
+#######################################################################################################
+#  DB Deployments need local Build servers currently 
+- stage: 'Deploy_DB'
+  displayName: 'Deploy_DataBase'
+  jobs:
+  - job: Deploy_DB
+    workspace:
+      clean: all 
+    pool: 
+      name: 'default'
+      demands: 'AZ'     
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub
+    - group: Azure-PRD
+    steps:
+     - checkout: none 
+     - download: Deploy
+       displayName: 'Download GaugeProd Build'
+       artifact: 'Database Build Artifact'
+
+     - task: RedgateSqlChangeAutomationRelease@4
+       displayName: 'Deploy_GaugeProd'
+       inputs:
+         Operation: 'DeployFromPackage'
+         PackagePath: '$(Pipeline.Workspace)/Deploy/Database Build Artifact'
+         SourceTrustServerCertificate: true
+         TargetDatabaseConnectionType: 'explicit'
+         TargetDatabaseServer: '$(TargetDatabaseServer)'
+         TargetTrustServerCertificate: true
+         TargetDatabaseName: '$(TargetDatabaseName)'
+         TargetAuthMethod: 'windowsAuthCredentials'
+         TargetDatabaseUsername: '$(TargetDatabaseUsername)'
+         TargetDatabasePassword: '$(TargetDatabasePassword)'
+         TransactionIsolationLevel: 'serializable'
+         AbortOnWarning: 'high'
+         requiredVersionOfDlma: latest
+
+     - download: Deploy
+       displayName: 'Download GTReports Build'
+       artifact: 'GTReports'
+     - task: SqlReportingServicesDeployment@1
+       displayName: 'Deploy_Reports'
+       inputs:
+         ReportFiles: '$(Pipeline.Workspace)/Deploy/GTReports/*.rdl'
+         ReportUploadRootPath: '/Gauge'
+         WebserviceUrl: '$(ReportingService2010WebServiceURL)'
+         WsUsername: '$(TargetDatabaseUsername)'
+         WsPassword: '$(TargetDatabasePassword)'
+#######################################################################################################
+- stage: 'Deploy_Web'
+  displayName: 'Deploy_Web'
+  jobs:
+  - deployment: 'Deploy_to_WEB_Server'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_to_WEB_Server'  # friendly name to display in the UI
+    variables:
+    - template: /Yml-pipelines/vars-prod.yml@Smarthub
+    - group: Azure-PRD
+    environment: 
+      name: GT-AZ-PRD
+      resourceType: VirtualMachine
+      tags: WEB
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+            displayName: 'Download SmartHub'
+            artifact: smarthub
+
+          - download: Deploy
+            displayName: 'Download GTAPI'
+            artifact: GTAPI
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub_Test'
+              WebsiteSource: 'SmartHub'
+              GT_APP_NAME: 'SmartHub'
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub_API'
+              WebsiteSource: 'GTAPI'
+              
+          - template: '/DevOps/pipelines/azure/Azure-smarhubtest-to-smarthub.yml'
+            parameters: 
+              WebsiteName: 'SmartHub'
+              GT_APP_NAME: 'SmartHub'
+################################################################################################

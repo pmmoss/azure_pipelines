@@ -1,0 +1,32 @@
+
+parameters:
+  GT_ServiceName: 'GT-DB-GaugeProd-CICD'
+  workingFolder: 'GT-DB-GaugeProd-CICD'
+
+steps:
+######################################################
+- task: redgatesoftware.redgateDlmAutomationBuild.DlmAutomationBuildTask.RedgateSqlChangeAutomationBuild@4
+  displayName: 'Build SQL Change Automation Project GT-DB-GaugeProd-CICD'
+  inputs:
+    sqlProj: 'GT-DB-GaugeProd-CICD/GT-DB-GaugeProd-CICD.sqlproj'
+    packageName: 'GT-DB-GaugeProd-CICD'
+    tempServerTypeBuild: sqlServer
+    tempServerNameBuild: '10.151.11.4'
+    tempDatabaseNameBuild: 'CICD-Test'
+    authMethodBuild: 'windowsAuth' 
+    tempTrustServerCertificateBuild: true
+    useSqlDoc: true
+    nugetPackageVersionUseBuildId: true
+    requiredVersionOfDlma: 'latest'
+    
+- task: CopyFiles@2
+  displayName: 'Copy Files to: $(build.artifactstagingdirectory)'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)'
+    Contents: |
+      GT-DB-GaugeProd-CICD/*.nupkg
+    TargetFolder: '$(build.artifactstagingdirectory)'
+    CleanTargetFolder: true
+    OverWrite: true
+    flattenFolders: true
+    preserveTimestamp: true

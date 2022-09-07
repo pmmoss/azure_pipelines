@@ -1,0 +1,82 @@
+
+parameters:
+  GT_ServiceName: ''
+  workingFolder: ''
+  
+steps:
+######################################################
+
+- task: NuGetToolInstaller@1
+  displayName: 'Use NuGet 5.8.0'
+  inputs: 
+    versionSpec: '5.8.0'
+
+
+- task: NuGetCommand@2
+  displayName: 'Nuget Restore ${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln'
+  inputs:
+    restoreSolution: '${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln'
+
+- task: VSBuild@1
+  displayName: 'Build ${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln solution'
+  inputs:
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
+    solution: '${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln'
+    clean: true
+
+- task: DotNetCoreCLI@2
+  displayName: 'Unit Test with DotNetCore Pipeline Job'
+  inputs:
+    command: 'test'
+    testRunTitle: '$(Build.Repository.Name)-\${{ parameters.GT_ServiceName }}'
+    arguments: '--configuration $(BuildConfiguration) /p:CollectCoverage=true --collect:"XPlat Code Coverage"'
+    projects: '${{ parameters.GT_ServiceName }}\**\*.csproj'
+    publishTestResults: true
+    workingDirectory: '$(system.defaultworkingdirectory)\${{ parameters.GT_ServiceName }}'
+    
+#- script: |
+#    dotnet tool install -g dotnet-reportgenerator-globaltool
+#    reportgenerator -reports:$(Agent.TempDirectory)/**/coverage.cobertura.xml -targetdir:$(Build.SourcesDirectory)/Coverage/HTML -reporttypes:Html;Cobertura
+#  displayName: 'Create Code coverage report'
+
+# Publish the code coverage result (summary and web site)
+# The summary allows to view the coverage percentage in the summary tab
+# The web site allows to view which lines are covered directly in Azure Pipeline
+- task: PublishCodeCoverageResults@1
+  displayName: 'Publish code coverage'
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(Build.SourcesDirectory)/Coverage/HTML/Cobertura.xml'
+
+- task: CopyFiles@2
+  displayName: 'Copy Files to: $(build.artifactstagingdirectory)'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)\${{ parameters.GT_WorkingFolder }}\bin\$(buildConfiguration)\netcoreapp3.1'
+    Contents: '**'
+    TargetFolder: '$(build.artifactstagingdirectory)'
+
+- task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+  displayName: ' PowerShell Replace appsettings.json'
+  inputs:
+    targetType: Inline
+    ScriptArguments: ' -root $(build.artifactstagingdirectory)'
+    script: |
+      Param(
+      [string]$root = "WhereisAppSettings.json"
+      )
+      Write-Output "Greetings from build-netcore-ms-service.yml"
+      # Variables
+      $root                       = $root
+      $removefile                 = $root + "\appsettings.json"
+      $replacefile                = $root + "\appsettings-tokenize.json"
+      Get-Item -path $root
+      Move-Item -Path $replacefile -Destination $removefile -force
+      Write-output "Copying $replaceFile over $removefile "
+    
+  
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Artifact ${{ parameters.GT_ServiceName }}'
+  inputs:
+    Path: '$(build.artifactstagingdirectory)'
+    artifactName: '${{ parameters.GT_ServiceName }}'

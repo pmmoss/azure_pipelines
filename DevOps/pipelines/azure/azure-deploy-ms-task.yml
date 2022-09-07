@@ -1,0 +1,96 @@
+# Deploy Microsoft Scheduled Tasks to GT-LB-$(ENV)-APP-* servers
+# Sets Variables for BuildReleaseVersion, ApplicationName, LaunchDarklyApplicationName
+# Parameterized for ENV (PROD,QA,DEV)
+parameters:
+  GT_ServiceName: ''
+  GT_workingFolder: ''
+
+steps:
+# Set Variables
+- task: jessehouwing.jessehouwing-vsts-variable-tasks.vsts-variable-set.VariableSetTask@1
+  displayName: 'Set variable:BuildReleaseVersion to: $(Build.BuildNumber)'
+  inputs:
+    VariableName: BuildReleaseVersion
+    Value: '$(Build.BuildNumber)'
+- task: jessehouwing.jessehouwing-vsts-variable-tasks.vsts-variable-set.VariableSetTask@1
+  displayName: 'Set variable:  ApplicationName'
+  inputs:
+    VariableName: ApplicationName
+    Value: '${{ parameters.GT_workingFolder }} $(ENV)'
+- task: jessehouwing.jessehouwing-vsts-variable-tasks.vsts-variable-set.VariableSetTask@1
+  displayName: 'Set variable:  LaunchDarklyApplicationName'
+  inputs:
+    VariableName: LaunchDarklyApplicationName
+    Value: '${{ parameters.GT_workingFolder }}'
+# Token Replace for Config Files
+- task: qetza.replacetokens.replacetokens-task.replacetokens@3
+  displayName: 'Replace Tokens: $(Pipeline.Workspace)/Deploy/${{ parameters.GT_workingFolder }}'
+  inputs:
+    rootDirectory: '$(Pipeline.Workspace)/Deploy/${{ parameters.GT_workingFolder }}'
+    targetFiles:  '**/appsettings.json, **/*.config'
+    encoding: 'auto'
+    writeBOM: true
+    actionOnMissing: 'warn'
+    keepToken: true
+    tokenPrefix: '#{'
+    tokenSuffix: '}'
+# Powershell Action On Agent
+# Powershell Action On Agent
+- task: petergroenewegen.PeterGroenewegen-Xpirit-Vsts-Build-InlinePowershell.Xpirit-Vsts-Build-InlinePowershell.InlinePowershell@1
+  displayName: 'Inline Powershell'
+  inputs:
+    ScriptArguments: '-serviceName ${{ parameters.GT_ServiceName }} -workingfolder ${{ parameters.GT_workingFolder }}'
+    Script: |
+      Param(
+      [string]$ServiceName,
+      [string]$workingFolder
+      )
+      # Variables
+      #$evnt                          = right($ServiceName,7)
+      $process                       = $ServiceName + "Service"
+      $rootDir                       = "c:\Gauge\GTApplications"
+      $ServiceDirectory              = "$rootDir\$workingFolder"
+      $BackupDirectory               = "g:\Gauge\GTBackups"
+      $BackupLocation                = "$BackupDirectory\$((Get-Date).ToString('MM-dd-yyyy_HH-mm'))-$ServiceName"
+      $InstallSourceDirectory        = "$(Pipeline.Workspace)/Deploy/$workingFolder"
+      $InstallDestinationDirectory   =  $rootDir
+      $SQLServerTypesFiles           = "$ServiceDirectory\SqlServerTypes\x86\*"
+
+      Write-Output "Settings"
+      #Write-Output "    EventLog Name:                        $evnt"
+      Write-Output "    Service Name:                         $GT_ServiceName"
+      Write-Output "    Process Name:                         $process"  
+      Write-Output "    Service Directory:                    $ServiceDirectory"
+      Write-Output "    Backup Directory:                     $BackupDirectory"
+      Write-Output "    Backup Location:                      $BackupLocation"
+      Write-Output "    Install Source Directory:             $InstallSourceDirectory"
+      Write-Output "    Install Destination Directory:        $InstallDestinationDirectory"
+      Write-Output "    SQLServerTypes Files :                $SQLServerTypesFiles"
+      Write-Output ""
+
+      #######################################################################################################
+      # Test That directory Exists
+      Write-Output " Testing source for files:  "
+      try {Test-Path $InstallSourceDirectory}
+      catch{
+        Write-Output "   ERROR:  $InstallSourceDirectory Source not found  "
+      }
+
+      #>
+      # Remove old files and Update with new files
+      Write-Output "    Updating service $ServiceName..."
+      Write-output  "    Removing $ServiceDirectory..."
+      if (Test-Path $ServiceDirectory) {
+        Write-Output "    ServiceDirectory found at: ($ServiceDirectory) - Removing...."
+        Remove-Item -Path $ServiceDirectory -Recurse
+      }
+
+      Write-Output "    Copy Files $InstallSourceDirectory  to $InstallDestinationDirectory"
+      Copy-Item $InstallSourceDirectory -Destination $InstallDestinationDirectory -Recurse -Force
+      
+      if (Test-Path $SQLServerTypesFiles ) {
+        Write-Output "    Copy Files $SQLServerTypesFiles to $ServiceDirectory"
+        Copy-Item $SQLServerTypesFiles  -Destination $ServiceDirectory -Force
+      }
+
+      Write-Output "    $ServiceName service updated"

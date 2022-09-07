@@ -1,0 +1,63 @@
+# Deploy Services and Scheduled Tasks to Server Group GT_LB_APP_**** using templates
+steps:
+
+### Harvester
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'GT_Harvester'
+    GT_WorkingFolder: 'Harvester'
+    GT_APP_NAME: 'Harvester'
+### Notification
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml' # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'GT_Notification'
+    GT_WorkingFolder: 'Notification'
+    GT_APP_NAME: 'Notification'
+### Decoder
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'GT_Decoder'
+    GT_WorkingFolder: 'DecoderService'
+    GT_APP_NAME: 'Decoder'
+### GTBatch Deploy
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'GT_GTBatch'      
+    GT_WorkingFolder: 'GTBatchService'
+    GT_APP_NAME: 'GTbatch'
+### AssetEventEngine
+- template: '/DevOps/pipelines/azure/azure-deploy-netcore-ms-service.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'AssetEventEngine'
+    GT_WorkingFolder: 'AssetEventEngine'
+    GT_APP_NAME: 'Asset Event Engine'
+
+
+# ############################## Deploy MS Scheduled Tasks
+###  GTMaintenanceNotification
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-task.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'GTMaintenanceNotification'      
+    GT_WorkingFolder: 'GTMaintenanceNotification'
+###  AEMPImport  
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-task.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'AEMPImport' 
+    GT_WorkingFolder: 'AEMPImport'  
+###  GTNHTSAUpdateService
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-task.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'GTNHTSAUpdateService'
+    GT_WorkingFolder: 'GTNHTSAUpdateService'
+### Hubspot User Export
+- template: '/DevOps/pipelines/azure/azure-deploy-ms-task.yml'  # Stage Template reference
+  parameters: 
+    GT_ServiceName: 'HubSpotUserExport'
+    GT_WorkingFolder: 'HubSpotUserExport'
+    GT_APP_NAME: 'HubSpotUserExport'
+    
+#- template: '/DevOps/pipelines/azure/azure-deploy-ms-service.yml'
+#  parameters: 
+#    GT_ServiceName: 'GT_Listener'
+#    GT_WorkingFolder: 'ListenerService'
+#    GT_APP_NAME: 'Listener'

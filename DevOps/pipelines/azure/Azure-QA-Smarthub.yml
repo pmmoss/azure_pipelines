@@ -1,0 +1,95 @@
+trigger: none
+pr: none  
+resources:
+  pipelines:
+  - pipeline: 'Deploy'
+    project: Gauge
+    source: 'QA-Monolith-Build'
+    trigger: true
+  repositories:
+  - repository: Smarthub
+    type: git
+    name: Gauge/Smarthub   
+
+stages:
+#######################################################################################################
+- stage: 'Deploy_DB'
+  displayName: 'Deploy_DataBase'
+  jobs:
+  - job: Deploy_DB
+    workspace:
+      clean: all 
+    pool: 
+      name: 'default'
+      demands: 'AZ'     
+    variables:
+    - group: Azure-QA
+    - template: /Yml-pipelines/vars-qa.yml@Smarthub
+    steps:
+     - checkout: none 
+     - download: Deploy
+       displayName: 'Download GaugeProd Build'
+       artifact: 'Database Build Artifact'
+
+     - task: RedgateSqlChangeAutomationRelease@4
+       displayName: 'Deploy_GaugeProd'
+       inputs:
+         Operation: 'DeployFromPackage'
+         PackagePath: '$(Pipeline.Workspace)/Deploy/Database Build Artifact'
+         SourceTrustServerCertificate: true
+         TargetDatabaseConnectionType: 'explicit'
+         TargetDatabaseServer: '$(TargetDatabaseServer)'
+         TargetTrustServerCertificate: true
+         TargetDatabaseName: '$(TargetDatabaseName)'
+         TargetAuthMethod: 'windowsAuthCredentials'
+         TargetDatabaseUsername: '$(TargetDatabaseUsername)'
+         TargetDatabasePassword: '$(TargetDatabasePassword)'
+         TransactionIsolationLevel: 'serializable'
+         AbortOnWarning: 'high'
+         requiredVersionOfDlma: latest
+
+     - download: Deploy
+       displayName: 'Download GTReports Build'
+       artifact: 'GTReports'
+     - task: SqlReportingServicesDeployment@1
+       displayName: 'Deploy_Reports'
+       inputs:
+         ReportFiles: '$(Pipeline.Workspace)/Deploy/GTReports/*.rdl'
+         ReportUploadRootPath: '/Gauge'
+         WebserviceUrl: '$(ReportingService2010WebServiceURL)'
+         WsUsername: '$(TargetDatabaseUsername)'
+         WsPassword: '$(TargetDatabasePassword)'
+#######################################################################################################
+- stage: 'Deploy_Web'
+  displayName: 'Deploy_Web'
+  jobs:
+  - deployment: 'Deploy_to_WEB_Server'   # name of the deployment job, A-Z, a-z, 0-9, and underscore
+    displayName: 'Deploy_to_WEB_Server'  # friendly name to display in the UI
+    variables:
+    - group: Azure-QA
+    - template: /Yml-pipelines/vars-qa.yml@Smarthub
+    environment: 
+      name: GT-AZ-QA
+      resourceType: VirtualMachine
+      tags: WEB
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: Deploy
+            displayName: 'Download SmartHub'
+            artifact: smarthub
+
+          - download: Deploy
+            displayName: 'Download GTAPI'
+            artifact: GTAPI
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub'
+
+          - template: '/DevOps/pipelines/azure/azure-deploy-iis.yml'
+            parameters: 
+              WebsiteName: 'SmartHub_API'
+              WebsiteSource: 'GTAPI'
+################################################################################################

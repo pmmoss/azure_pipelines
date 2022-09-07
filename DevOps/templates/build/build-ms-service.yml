@@ -1,0 +1,69 @@
+# build-ms-service.yml
+# Building .NET service application common steps
+# Pass Parameters
+
+parameters:
+  GT_ServiceName: ''
+  workingFolder: ''
+  
+steps:
+######################################################
+- task: PowerShell@2
+  displayName: 'PowerShell ${{ parameters.GT_ServiceName }} Param Check'
+  inputs:
+    targetType: Inline
+    script: |
+      Write-Output " Greetings from build-ms-service.yml"
+      Write-Output "   platform = $(BuildPlatform)"
+      Write-Output "   configuration = $(BuildConfiguration)"
+      Write-Output "   ServiceName as passed = ${{ parameters.GT_ServiceName }}"
+      Write-Output "   solution =  ${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln"
+      Write-Output "   Apply XDTtransform =  ${{ parameters.transform }}"
+      Write-Output "   workingFolder =  ${{ parameters.GT_WorkingFolder }}"
+
+- task: NuGetToolInstaller@0
+  displayName: 'Use NuGet 5.8.0'
+  inputs: 
+    versionSpec: '5.8.0'
+
+- task: NuGetCommand@2
+  inputs:
+    restoreSolution: '${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln'
+    packagesdirectory: '.\packages'
+
+
+- task: qetza.xdttransform.xdttransform-task.xdttransform@2
+  displayName: 'Apply transforms App.tokenize.config => App.config'
+  inputs:
+    workingFolder: '${{ parameters.GT_WorkingFolder }}'
+    transforms: 'App.tokenize.config => App.config'
+    
+- task: VSBuild@1
+  displayName: 'Build solution'
+  inputs:
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
+    solution: '${{ parameters.GT_ServiceName }}\${{ parameters.GT_ServiceName }}.sln'
+    clean: false
+
+- task: PublishSymbols@2
+  displayName: 'Publish symbols path'
+  inputs:
+    SearchPattern: '**\bin\**\*.pdb'
+    PublishSymbols: false
+  continueOnError: true
+
+
+- task: CopyFiles@2
+  displayName: 'Copy Files to: $(build.artifactstagingdirectory)'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)\${{ parameters.GT_WorkingFolder }}\bin\$(buildConfiguration)'
+    Contents: '**'
+    TargetFolder: '$(build.artifactstagingdirectory)'
+
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Artifact ${{ parameters.GT_ServiceName }}'
+  inputs:
+    Path: '$(build.artifactstagingdirectory)'
+    artifactName: '${{ parameters.GT_ServiceName }}'
