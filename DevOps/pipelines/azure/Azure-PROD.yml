@@ -251,7 +251,7 @@ stages:
     - name: ReplicationEnabled
       value: False
     - name: 'ApplicationServices'
-      value: '"server=10.150.11.4;Database=SmartHub_Prod;User ID=GT-LB-PRD-DMZ-1;Password=My!!gauge;" providerName="System.Data.SqlClient"'
+      value: ''
     
     environment: 
       name: GT-LB-PRD
