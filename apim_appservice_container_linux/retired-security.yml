@@ -1,0 +1,61 @@
+stages:
+- stage: Security_Scan
+  displayName: Scans For security
+  jobs:
+  - job: OWASP_Scan
+    displayName: OWASP_Scan
+    pool: Default
+       # vmImage: 'windows-latest'
+    variables:
+    - name: 'buildConfiguration'
+      value: 'Release'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .net 5.0.x'
+      inputs:
+        version: '5.0.x'
+        includePreviewVersions: true
+        
+    - task: NuGetToolInstaller@1
+      displayName: 'Use NuGet 5.8.0'
+      inputs: 
+        versionSpec: '5.8.0'
+        
+    - task: SonarQubePrepare@4
+      inputs:
+        SonarQube: 'DEv-Sonarqube'
+        scannerMode: 'MSBuild'
+        projectKey: 'b27bf7b02e4c9e90c236bebdc3fb699186e2a68d'
+        projectName: 'Company_API'
+
+    - task: NuGetAuthenticate@0
+      displayName: 'Authenticate to Gauge Artifacts'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet restore'
+      inputs:
+        command: 'restore'
+        projects: '$(Build.SourcesDirectory)/**/*.csproj'
+        feedsToUse: 'select'
+        vstsFeed: 'REDACTED'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet build'
+      inputs:
+        command: build
+        projects: '$(Build.SourcesDirectory)/**/*.csproj'
+
+    - task: SonarQubeAnalyze@4
+
+    - task: SonarQubePublish@4
+      inputs:
+        pollingTimeoutSec: '300'
+        
+    - task: dependency-check-build-task@5
+      inputs:
+        projectName: 'OWASP'
+        scanPath: '**/*'
+        format: 'HTML, CSV'
+        reportsDirectory: '$(System.DefaultWorkingDirectory)'
+        enableExperimental: true
+        additionalArguments: '--advancedHelp'

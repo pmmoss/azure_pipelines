@@ -1,0 +1,18 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "api_azure_name": {
+            "value": "gt-companyapi-ncus-Dev-01"
+        },
+        "api_gauge_uri": {
+            "value": "dev-companyapi.gaugesmart.us"
+        },
+        "serverfarms_asp_linux_p2v1_ncus_dev_01_externalid": {
+            "value": "/subscriptions/d002407a-704a-4a42-bcf8-ee7cb5e23d00/resourceGroups/rg-apim-dev-ncus-01/providers/Microsoft.Web/serverfarms/asp-linux-p2v1-ncus-dev-01"
+        },
+        "virtualNetworks_vnet_dev_qa_ncus_01_externalid": {
+            "value": null
+        }
+    }
+}

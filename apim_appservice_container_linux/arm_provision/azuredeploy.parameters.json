@@ -1,0 +1,36 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {	
+	   "Name": {
+		    "value": "#{_gt-name_}"
+       },
+	   "environment":{
+		"value": "#{_ENV_}"
+	  },
+	   "location": {
+		    "value": "North Central US"
+	   },
+	   "APPINSIGHTS_INSTRUMENTATIONKEY":{
+			"value": "#{_APPINSIGHTS_INSTRUMENTATIONKEY_}"
+		},
+		"APPLICATIONINSIGHTS_CONNECTION_STRING":{
+			"value": "#{_APPLICATIONINSIGHTS_CONNECTION_STRING_}"
+		},
+		"dockerRegistryUrl": {
+			"value": "#{_DOCKER_REGISTRY_SERVER_URL_}"
+		},
+		"dockerRegistryUsername": {
+			"value": "#{_DOCKER_REGISTRY_SERVER_USERNAME_}"
+		},
+		"dockerRegistryPassword": {
+			"value": "#{_dockerRegistryPassword_}"
+		},
+		"SmartHubDB_connectionString":{
+			"value": "#{_SmartHubDB_}"
+		},
+		"WorkOrderDB_connectionString":{
+			"value": "#{_WorkOrderDB_}"
+		}
+    }
+}

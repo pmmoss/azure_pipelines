@@ -1,0 +1,37 @@
+################################
+#  Retired after postman integration use build1.yml
+################################
+stages:
+- stage: Build
+  displayName: Build and push stage To GTContainerRegistry
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - script: |
+        echo $PWD
+        ls
+    - task: NuGetAuthenticate@0
+
+    - task: Docker@2
+      displayName: Build Docker with arguments    
+      inputs:
+        containerRegistry: $(dockerRegistryServiceConnection)
+        repository: $(imageRepository)
+        command: 'build'
+        Dockerfile: $(filePath)/Dockerfile
+        arguments: '--build-arg FEED_ACCESSTOKEN=$(VSTS_FEED) -t $(containerRegistry)/$(imageRepository):$(tag)'
+        tags: |
+          $(Build.BuildId)
+          $(tag)
+    - task: Docker@2
+      displayName: Push an image to container registry
+      inputs:
+        command: Push
+        repository: $(imageRepository)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(Build.BuildId)
+          $(tag)

@@ -1,0 +1,189 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "api_azure_name": {
+            "defaultValue": "gt-companyapi-ncus-Dev-01",
+            "type": "String"
+        },
+        "api_gauge_uri": {
+            "defaultValue": "dev-companyapi.gaugesmart.us",
+            "type": "String"
+        },
+        "serverfarms_asp_linux_p2v1_ncus_dev_01_externalid": {
+            "defaultValue": "/subscriptions/d002407a-704a-4a42-bcf8-ee7cb5e23d00/resourceGroups/rg-apim-dev-ncus-01/providers/Microsoft.Web/serverfarms/asp-linux-p2v1-ncus-dev-01",
+            "type": "String"
+        },
+        "virtualNetworks_vnet_dev_qa_ncus_01_externalid": {
+            "defaultValue": "/subscriptions/d002407a-704a-4a42-bcf8-ee7cb5e23d00/resourceGroups/rg-vnet-dev-qa-ncus-01/providers/Microsoft.Network/virtualNetworks/vnet-dev-qa-ncus-01",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[parameters('api_azure_name')]",
+            "location": "North Central US",
+            "kind": "app,linux,container",
+            "properties": {
+                "enabled": true,
+                "hostNameSslStates": [
+                    {
+                        "name": "[parameters('api_gauge_uri')]",
+                        "sslState": "IpBasedEnabled",
+                        "virtualIP": "52.162.121.175",
+                        "thumbprint": "3C38C5970A11E2871EC2F54D0F3D030369928125",
+                        "hostType": "Standard"
+                    },
+                    {
+                        "name": "[concat(parameters('api_azure_name'), '.azurewebsites.net')]",
+                        "sslState": "Disabled",
+                        "hostType": "Standard"
+                    },
+                    {
+                        "name": "[concat(parameters('api_azure_name'), '.scm.azurewebsites.net')]",
+                        "sslState": "Disabled",
+                        "hostType": "Repository"
+                    }
+                ],
+                "serverFarmId": "[parameters('serverfarms_asp_linux_p2v1_ncus_dev_01_externalid')]",
+                "reserved": true,
+                "isXenon": false,
+                "hyperV": false,
+                "siteConfig": {},
+                "scmSiteAlsoStopped": false,
+                "clientAffinityEnabled": true,
+                "clientCertEnabled": false,
+                "hostNamesDisabled": false,
+                "containerSize": 0,
+                "dailyMemoryTimeQuota": 0,
+                "httpsOnly": true,
+                "redundancyMode": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/config",
+            "apiVersion": "2018-11-01",
+            "name": "[concat(parameters('api_azure_name'), '/web')]",
+            "location": "North Central US",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('api_azure_name'))]"
+            ],
+            "properties": {
+                "numberOfWorkers": 1,
+                "defaultDocuments": [
+                    "Default.htm",
+                    "Default.html",
+                    "Default.asp",
+                    "index.htm",
+                    "index.html",
+                    "iisstart.htm",
+                    "default.aspx",
+                    "index.php",
+                    "hostingstart.html"
+                ],
+                "netFrameworkVersion": "v4.0",
+                "linuxFxVersion":  "[concat('DOCKER|', variables('dockerImageName'))]",
+                "requestTracingEnabled": false,
+                "remoteDebuggingEnabled": false,
+                "remoteDebuggingVersion": "VS2019",
+                "httpLoggingEnabled": false,
+                "logsDirectorySizeLimit": 35,
+                "detailedErrorLoggingEnabled": false,
+                "publishingUsername": "$gt-companyapi-ncus-Dev-01",
+                "azureStorageAccounts": {},
+                "scmType": "None",
+                "use32BitWorkerProcess": true,
+                "webSocketsEnabled": false,
+                "alwaysOn": true,
+                "managedPipelineMode": "Integrated",
+                "virtualApplications": [
+                    {
+                        "virtualPath": "/",
+                        "physicalPath": "site\\wwwroot",
+                        "preloadEnabled": true
+                    }
+                ],
+                "loadBalancing": "LeastRequests",
+                "experiments": {
+                    "rampUpRules": []
+                },
+                "autoHealEnabled": false,
+                "vnetName": "02c61dc7-ba50-4a68-a9e5-7b76143924c2_snet-vnetintegration-gt-poc-ncus-01",
+                "cors": {
+                    "allowedOrigins": [
+                        "*"
+                    ],
+                    "supportCredentials": false
+                },
+                "localMySqlEnabled": false,
+                "ipSecurityRestrictions": [
+                    {
+                        "ipAddress": "Any",
+                        "action": "Allow",
+                        "priority": 1,
+                        "name": "Allow all",
+                        "description": "Allow all access"
+                    }
+                ],
+                "scmIpSecurityRestrictions": [
+                    {
+                        "ipAddress": "Any",
+                        "action": "Allow",
+                        "priority": 1,
+                        "name": "Allow all",
+                        "description": "Allow all access"
+                    }
+                ],
+                "scmIpSecurityRestrictionsUseMain": false,
+                "http20Enabled": false,
+                "minTlsVersion": "1.2",
+                "ftpsState": "FtpsOnly",
+                "reservedInstanceCount": 0
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/hostNameBindings",
+            "apiVersion": "2018-11-01",
+            "name": "[concat(parameters('api_azure_name'), '/', parameters('api_gauge_uri'))]",
+            "location": "North Central US",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('api_azure_name'))]"
+            ],
+            "properties": {
+                "siteName": "[parameters('api_azure_name')]",
+                "hostNameType": "Verified",
+                "sslState": "IpBasedEnabled",
+                "thumbprint": "3C38C5970A11E2871EC2F54D0F3D030369928125"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/hostNameBindings",
+            "apiVersion": "2018-11-01",
+            "name": "[concat(parameters('api_azure_name'), '/', parameters('api_azure_name'), '.azurewebsites.net')]",
+            "location": "North Central US",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('api_azure_name'))]"
+            ],
+            "properties": {
+                "siteName": "[parameters('api_azure_name')]",
+                "hostNameType": "Verified"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/virtualNetworkConnections",
+            "apiVersion": "2018-11-01",
+            "name": "[concat(parameters('api_azure_name'), '/02c61dc7-ba50-4a68-a9e5-7b76143924c2_snet-vnetintegration-gt-poc-ncus-01')]",
+            "location": "North Central US",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('api_azure_name'))]"
+            ],
+            "properties": {
+                "vnetResourceId": "[concat(parameters('virtualNetworks_vnet_dev_qa_ncus_01_externalid'), '/subnets/snet-vnetintegration-gt-poc-ncus-01')]",
+                "isSwift": true
+            }
+        }
+    ]
+}

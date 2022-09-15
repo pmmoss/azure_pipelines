@@ -1,0 +1,41 @@
+
+stages:
+- stage: Provision
+  displayName: Provision App-Service for Linux Container
+  jobs:
+  - job: 
+    displayName: Provision 
+    pool:
+      vmImage: $(vmImageName)
+    variables: 
+      gt-name: '$(imageRepository)'
+    steps:
+    - checkout: CICD_Templates
+    - script: |
+        echo $(Build.SourcesDirectory)
+        ls $(Build.SourcesDirectory) *
+    
+
+    - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+      displayName: 'Replace Tokens: $(Build.SourcesDirectory)'
+      inputs:
+        rootDirectory: '$(Build.SourcesDirectory)/'
+        targetFiles: '$(Build.SourcesDirectory)/**/apim_appservice_container_linux/arm_provision/*.parameters.json'
+        encoding: 'auto'
+        writeBOM: true
+        actionOnMissing: 'warn'
+        keepToken: true
+        tokenPrefix: '#{_'
+        tokenSuffix: '_}'
+
+    # - task: AzureResourceManagerTemplateDeployment@3
+    #   inputs:
+    #     deploymentScope: 'Resource Group'
+    #     azureResourceManagerConnection: $(azSubscription)
+    #     action: 'Create Or Update Resource Group'
+    #     resourceGroupName: 'rg-$(apimInstance)'
+    #     location: 'North Central US'
+    #     templateLocation: 'Linked artifact'
+    #     csmFile: '$(Build.SourcesDirectory)/**/apim_appservice_container_linux/arm_provision/azuredeploy.json'
+    #     csmParametersFile: '$(Build.SourcesDirectory)/**/apim_appservice_container_linux/arm_provision/azuredeploy.parameters.json'
+    #     deploymentMode: 'Incremental'

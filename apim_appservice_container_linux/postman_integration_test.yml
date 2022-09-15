@@ -1,0 +1,43 @@
+stages:
+- stage: Postman_Integration  
+  displayName: 'Postman_Integration Tests'
+  pool: 
+    name: default
+    #vmImage: $(vmImageName)
+    demands: 'AZ'
+  jobs:
+  - job: Test
+    displayName: 'JobName: Test'
+    variables:
+    - name: 'buildConfiguration'
+      value: 'Release'
+    steps:  
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '>=14.x'
+        checkLatest: true 
+    #- script: npm install -g
+    - task: Npm@1
+      displayName: npm custom
+      inputs:
+        command: custom
+        verbose: false
+        customCommand: install -g newman
+    - task: Npm@1
+      displayName: npm custom
+      inputs:
+        command: custom
+        verbose: false
+        customCommand: install -g newman-reporter-junitfull
+    - task: CmdLine@2
+      displayName: Command Line Script
+      inputs:
+        script: newman run $(System.DefaultWorkingDirectory)\$(repofolder).Test\PostmanCollections\Collections\$(repofolder).postman_collection.json -e $(System.DefaultWorkingDirectory)\$(repofolder).Test\PostmanCollections\Environments\$(ENV).postman_environment.json --bail -x -r junit --reporter-junit-export $(build.artifactstagingdirectory)\Results\JunitResults.xml
+    - task: PublishTestResults@2
+      displayName: Publish Test Results
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**\*.xml'
+        searchFolder: $(build.artifactstagingdirectory)
+        mergeTestResults: true
+        #failTaskOnFailedTests: true

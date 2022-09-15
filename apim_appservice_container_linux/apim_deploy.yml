@@ -1,0 +1,45 @@
+stages: 
+- stage: Deploy
+  displayName: Deploy swagger to APIM
+  jobs:
+  - job: Deploy
+    displayName: Deploy
+    pool: 
+      name: 'default'
+      demands: 'AZ'
+    steps:          
+    - task: AzurePowerShell@5
+      inputs:
+        azureSubscription: $(azSubscription)
+        ScriptType: 'InlineScript'
+        Inline: |
+          $apimPath = '$(apimSuffx)'
+          write-output $apimPath
+          $resourcegroupname = 'rg-$(apimInstance)'
+          write-output $resourcegroupname
+          $apim_servicename = '$(apimInstance)'
+          write-output $apim_servicename 
+          $servicename = '$(imageRepository)'
+          ################################
+          $servicename = $servicename -replace "gt" , "$(ENV)"
+          ################################
+          $ServiceURL = "https://" + $Servicename + ".gaugesmart.us"
+          write-output  $ServiceURL
+          $SpecificationUrl = $ServiceURL + "/swagger/v1/swagger.json"
+          write-output $SpecificationUrl
+          #######
+          $ApiMgmtContext = New-AzApiManagementContext -ResourceGroupName $resourcegroupname -ServiceName $apim_servicename
+          $apis = Get-AzApiManagementApi -Context $ApiMgmtContext
+          $api = $apis | Where-Object { $_.Path -eq $apimPath }
+          if ( $api){
+              Remove-AzApiManagementApi -Context $ApiMgmtContext -ApiId $api.ApiId
+              Import-AzApiManagementApi -Context $ApiMgmtContext -SpecificationFormat OpenApi -SpecificationUrl $SpecificationUrl -ServiceUrl $ServiceURL -path $apimPath -ApiRevision '1'
+          }
+          else{
+              Import-AzApiManagementApi -Context $ApiMgmtContext -SpecificationFormat OpenApi -SpecificationUrl $SpecificationUrl -ServiceUrl $ServiceURL -path $apimPath -ApiRevision '1'
+              
+          }
+
+        FailOnStandardError: true
+        azurePowerShellVersion: 'LatestVersion'
+
