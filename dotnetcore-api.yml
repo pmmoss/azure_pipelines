@@ -1,0 +1,42 @@
+﻿# Docker .Net API Deployed to AppService for containers instance on App service plan behind APIM instance
+# Run Unit Tests
+# Provision App Service to Current App Service Plan
+# Build and push an image to Azure Container Registry
+# Make changes to APIM via swagger definition of service
+##############################################################
+trigger:
+- main
+
+resources:
+  repositories:
+    - repository: CICD_Templates
+      type: git
+      name: Gauge/CICD_Templates
+
+variables:
+- name: apimSuffx
+  value: 'company' 
+- name: imageRepository
+  value: 'gt-companyapi'
+- name: repofolder
+  value: 'CompanyAPI'
+- name: 'SonarProjectKey'
+  value: 'gaugetelematics_Company_API'
+- name: 'SonarProjectName'
+  value: 'Company_API'
+
+- name: tag   
+  value: 'latest' #'$(Build.BuildId)'
+- name: vmImageName
+  value: 'ubuntu-latest'
+# Added Library variables for sensitive 
+- group: 'API-DEV'
+- group: 'Azure-Dev'
+############################################################################
+
+stages:
+- template: apim_appservice_container_linux/unit_test.yml@CICD_Templates
+- template: apim_appservice_container_linux/build1.yml@CICD_Templates
+- template: apim_appservice_container_linux/provision.yml@CICD_Templates
+- template: apim_appservice_container_linux/apim_deploy.yml@CICD_Templates
+- template: apim_appservice_container_linux/postman_integration_test.yml@CICD_Templates
